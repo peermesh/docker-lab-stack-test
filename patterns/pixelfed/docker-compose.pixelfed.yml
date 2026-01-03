@@ -1,0 +1,230 @@
+# ==============================================================
+# Pixelfed - Federated Image Sharing - Docker Compose Fragment
+# ==============================================================
+# Instagram alternative with ActivityPub federation
+#
+# Example Version: 1.0
+# Documentation: patterns/pixelfed/README.md
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f patterns/pixelfed/docker-compose.pixelfed.yml \
+#                  --profile pixelfed --profile mysql --profile redis up -d
+#
+# Prerequisites:
+#   1. Foundation running (Traefik)
+#   2. MySQL and Redis profiles enabled
+#   3. Configure .env with PIXELFED_* variables
+#   4. Run: docker compose exec pixelfed php artisan key:generate
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-pixelfed-healthcheck: &pixelfed-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 120s
+
+x-pixelfed-logging: &pixelfed-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # =============================================================
+  # Pixelfed - Image Sharing Platform
+  # =============================================================
+  # Federated Instagram alternative
+  # Full ActivityPub support
+  # Requires MySQL + Redis
+  # =============================================================
+  pixelfed:
+    image: zknt/pixelfed:latest
+    container_name: pixelfed
+
+    profiles:
+      - pixelfed
+      - full
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - pixelfed_app_key
+      - mysql_root_password
+
+    environment:
+      # App settings
+      APP_NAME: ${PIXELFED_APP_NAME:-My Photos}
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: https://photos.${DOMAIN:-example.com}
+      APP_DOMAIN: photos.${DOMAIN:-example.com}
+      APP_KEY_FILE: /run/secrets/pixelfed_app_key
+
+      # Admin
+      ADMIN_DOMAIN: photos.${DOMAIN:-example.com}
+      INSTANCE_DESCRIPTION: ${PIXELFED_DESCRIPTION:-Federated photo sharing}
+      INSTANCE_PUBLIC_HASHTAGS: "false"
+      INSTANCE_CONTACT_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+
+      # Database
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pixelfed
+      DB_USERNAME: pixelfed
+      DB_PASSWORD_FILE: /run/secrets/mysql_root_password
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_DRIVER: redis
+
+      # ActivityPub Federation
+      ACTIVITY_PUB: "true"
+      AP_REMOTE_FOLLOW: "true"
+      AP_INBOX: "true"
+      AP_OUTBOX: "true"
+      AP_SHAREDINBOX: "true"
+
+      # Storage
+      FILESYSTEM_DRIVER: local
+      FILESYSTEM_CLOUD: local
+
+      # Image processing
+      IMAGE_DRIVER: imagick
+      MAX_PHOTO_SIZE: 15000
+      MAX_ALBUM_LENGTH: 10
+
+      # Trust proxy (behind Traefik)
+      TRUST_PROXIES: "*"
+
+      # Logging
+      LOG_CHANNEL: stderr
+
+    volumes:
+      - pixelfed_storage:/var/www/storage
+
+    networks:
+      - db-internal
+      - app-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    healthcheck:
+      <<: *pixelfed-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost/api/nodeinfo/2.0.json || exit 1"]
+
+    restart: unless-stopped
+    logging:
+      <<: *pixelfed-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pixelfed.rule=Host(`photos.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.pixelfed.entrypoints=websecure"
+      - "traefik.http.routers.pixelfed.tls=true"
+      - "traefik.http.routers.pixelfed.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pixelfed.loadbalancer.server.port=80"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # =============================================================
+  # Pixelfed Worker - Queue Processing
+  # =============================================================
+  pixelfed-worker:
+    image: zknt/pixelfed:latest
+    container_name: pixelfed_worker
+
+    profiles:
+      - pixelfed
+      - full
+
+    depends_on:
+      - pixelfed
+
+    command: php artisan horizon
+
+    secrets:
+      - pixelfed_app_key
+      - mysql_root_password
+
+    environment:
+      APP_ENV: production
+      APP_KEY_FILE: /run/secrets/pixelfed_app_key
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pixelfed
+      DB_USERNAME: pixelfed
+      DB_PASSWORD_FILE: /run/secrets/mysql_root_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_DRIVER: redis
+
+    volumes:
+      - pixelfed_storage:/var/www/storage
+
+    networks:
+      - db-internal
+      - app-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    restart: unless-stopped
+    logging:
+      <<: *pixelfed-logging
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  pixelfed_app_key:
+    file: ./secrets/pixelfed_app_key
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  pixelfed_storage:
+    driver: local
+
+# ==============================================================
+# Networks (reference existing)
+# ==============================================================
+
+networks:
+  db-internal:
+    external: true
+  app-internal:
+    external: true
+  proxy-external:
+    external: true

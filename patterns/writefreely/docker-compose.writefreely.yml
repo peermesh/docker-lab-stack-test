@@ -1,0 +1,140 @@
+# ==============================================================
+# WriteFreely - Minimalist Blogging - Docker Compose Fragment
+# ==============================================================
+# Lightweight ActivityPub-enabled blogging platform
+# 128MB RAM footprint, federates with Mastodon/etc.
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f patterns/writefreely/docker-compose.writefreely.yml \
+#                  --profile writefreely --profile mysql up -d
+#
+# Prerequisites:
+#   1. Foundation running (Traefik)
+#   2. MySQL profile enabled
+#   3. Configure .env with WRITEFREELY_* variables
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-writefreely-healthcheck: &writefreely-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 60s
+
+x-writefreely-logging: &writefreely-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # =============================================================
+  # WriteFreely - Minimalist Blog Platform
+  # =============================================================
+  # Lightweight, distraction-free writing platform
+  # Native ActivityPub federation
+  # Go binary with minimal resource usage
+  # =============================================================
+  writefreely:
+    image: writeas/writefreely:latest
+    container_name: writefreely
+
+    profiles:
+      - writefreely
+      - full
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    secrets:
+      - mysql_root_password
+
+    environment:
+      # Database configuration
+      WRITEFREELY_DATABASE_TYPE: mysql
+      WRITEFREELY_DATABASE_NAME: writefreely
+      WRITEFREELY_DATABASE_USER: writefreely
+      WRITEFREELY_DATABASE_PASSWORD_FILE: /run/secrets/mysql_root_password
+      WRITEFREELY_DATABASE_HOST: mysql
+      WRITEFREELY_DATABASE_PORT: 3306
+
+      # Site configuration
+      WRITEFREELY_SITE_NAME: ${WRITEFREELY_SITE_NAME:-My Blog}
+      WRITEFREELY_HOST: https://blog.${DOMAIN:-example.com}
+
+      # Federation
+      WRITEFREELY_FEDERATION: "true"
+      WRITEFREELY_PUBLIC_STATS: "true"
+      WRITEFREELY_PRIVATE: "false"
+
+      # Single-user or multi-user
+      WRITEFREELY_SINGLE_USER: ${WRITEFREELY_SINGLE_USER:-false}
+
+    volumes:
+      - writefreely_data:/go/keys
+      - ./patterns/writefreely/config/config.ini:/go/config.ini
+
+    networks:
+      - db-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
+    healthcheck:
+      <<: *writefreely-healthcheck
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
+
+    restart: unless-stopped
+    logging:
+      <<: *writefreely-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.writefreely.rule=Host(`blog.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.writefreely.entrypoints=websecure"
+      - "traefik.http.routers.writefreely.tls=true"
+      - "traefik.http.routers.writefreely.tls.certresolver=letsencrypt"
+      - "traefik.http.services.writefreely.loadbalancer.server.port=8080"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  writefreely_data:
+    driver: local
+
+# ==============================================================
+# Networks (reference existing)
+# ==============================================================
+
+networks:
+  db-internal:
+    external: true
+    name: db-internal
+  proxy-external:
+    external: true
+    name: proxy-external

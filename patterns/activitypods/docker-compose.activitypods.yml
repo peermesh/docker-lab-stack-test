@@ -1,0 +1,296 @@
+# ==============================================================
+# ActivityPods - Solid + ActivityPub Unified - Docker Compose Fragment
+# ==============================================================
+# SSI-first canonical data store with native ActivityPub federation
+#
+# Example Version: 1.0
+# Documentation: patterns/activitypods/README.md
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f patterns/activitypods/docker-compose.activitypods.yml \
+#                  --profile activitypods --profile redis up -d
+#
+# Prerequisites:
+#   1. Foundation running (Traefik)
+#   2. Redis profile enabled
+#   3. Configure .env with ACTIVITYPODS_* variables
+#   4. 4GB RAM minimum (Fuseki requirement)
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-activitypods-healthcheck: &activitypods-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 120s
+
+x-activitypods-logging: &activitypods-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # =============================================================
+  # Apache Jena Fuseki - SPARQL Triple Store
+  # =============================================================
+  # Semantic data storage for ActivityPods
+  # Stores Solid pods as RDF triples with WebACL
+  # =============================================================
+  fuseki:
+    image: semapps/jena-fuseki-webacl:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-lab}_fuseki
+
+    profiles:
+      - activitypods
+      - full
+
+    secrets:
+      - fuseki_password
+
+    environment:
+      ADMIN_PASSWORD_FILE: /run/secrets/fuseki_password
+      JAVA_OPTIONS: "-Xmx3g -Xms1g"
+
+    volumes:
+      - fuseki_data:/fuseki
+
+    networks:
+      - app-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+    healthcheck:
+      <<: *activitypods-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:3030/$/ping || exit 1"]
+
+    restart: unless-stopped
+    logging:
+      <<: *activitypods-logging
+
+  # =============================================================
+  # ActivityPods Backend
+  # =============================================================
+  # Solid + ActivityPub unified backend
+  # WebID = ActivityPub Actor (SSI-first identity)
+  # =============================================================
+  activitypods-backend:
+    image: activitypods/backend:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-lab}_activitypods_backend
+
+    profiles:
+      - activitypods
+      - full
+
+    depends_on:
+      fuseki:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - activitypods_cookie_secret
+      - fuseki_password
+
+    environment:
+      # Instance configuration
+      SEMAPPS_INSTANCE_NAME: ${ACTIVITYPODS_INSTANCE_NAME:-My Pod Provider}
+      SEMAPPS_INSTANCE_DESCRIPTION: ${ACTIVITYPODS_INSTANCE_DESCRIPTION:-Self-hosted Solid+ActivityPub pods}
+
+      # URLs
+      SEMAPPS_HOME_URL: https://pods.${DOMAIN:-example.com}
+      SEMAPPS_FRONTEND_URL: https://pods.${DOMAIN:-example.com}
+
+      # Fuseki connection
+      SEMAPPS_SPARQL_ENDPOINT: http://fuseki:3030/
+      SEMAPPS_MAIN_DATASET: localData
+      SEMAPPS_JENA_USER: admin
+      SEMAPPS_JENA_PASSWORD_FILE: /run/secrets/fuseki_password
+
+      # Redis connection
+      SEMAPPS_REDIS_URL: redis://redis:6379/0
+
+      # Security
+      SEMAPPS_COOKIE_SECRET_FILE: /run/secrets/activitypods_cookie_secret
+
+      # MapBox (optional - for location autocomplete)
+      SEMAPPS_MAPBOX_ACCESS_TOKEN: ${ACTIVITYPODS_MAPBOX_TOKEN:-}
+
+      # Email (optional - for notifications)
+      SEMAPPS_FROM_EMAIL: ${ACTIVITYPODS_FROM_EMAIL:-noreply@${DOMAIN:-example.com}}
+      SEMAPPS_FROM_NAME: ${ACTIVITYPODS_FROM_NAME:-Pod Provider}
+      SEMAPPS_SMTP_HOST: ${SMTP_HOST:-}
+      SEMAPPS_SMTP_PORT: ${SMTP_PORT:-587}
+      SEMAPPS_SMTP_USER: ${SMTP_USER:-}
+      SEMAPPS_SMTP_PASS: ${SMTP_PASS:-}
+      SEMAPPS_SMTP_SECURE: ${SMTP_SECURE:-false}
+
+    volumes:
+      - activitypods_uploads:/app/uploads
+
+    networks:
+      - app-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    healthcheck:
+      <<: *activitypods-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/.well-known/webfinger?resource=acct:test@pods.${DOMAIN:-example.com} || exit 1"]
+      start_period: 180s
+
+    restart: unless-stopped
+    logging:
+      <<: *activitypods-logging
+
+    labels:
+      - "traefik.enable=true"
+      # Backend API router
+      - "traefik.http.routers.activitypods-backend.rule=Host(`pods.${DOMAIN:-example.com}`) && PathPrefix(`/`)"
+      - "traefik.http.routers.activitypods-backend.entrypoints=websecure"
+      - "traefik.http.routers.activitypods-backend.tls=true"
+      - "traefik.http.routers.activitypods-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.activitypods-backend.priority=1"
+      - "traefik.http.services.activitypods-backend.loadbalancer.server.port=3000"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # =============================================================
+  # ActivityPods Frontend
+  # =============================================================
+  # User interface for pod management
+  # =============================================================
+  activitypods-frontend:
+    image: activitypods/frontend:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-lab}_activitypods_frontend
+
+    profiles:
+      - activitypods
+      - full
+
+    depends_on:
+      - activitypods-backend
+
+    environment:
+      REACT_APP_CONFIG_URL: https://pods.${DOMAIN:-example.com}/.well-known/config.json
+
+    networks:
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+    healthcheck:
+      <<: *activitypods-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
+      start_period: 30s
+
+    restart: unless-stopped
+    logging:
+      <<: *activitypods-logging
+
+    labels:
+      - "traefik.enable=true"
+      # Frontend router (higher priority for static assets)
+      - "traefik.http.routers.activitypods-frontend.rule=Host(`pods.${DOMAIN:-example.com}`) && PathPrefix(`/static`, `/manifest.json`, `/favicon`)"
+      - "traefik.http.routers.activitypods-frontend.entrypoints=websecure"
+      - "traefik.http.routers.activitypods-frontend.tls=true"
+      - "traefik.http.routers.activitypods-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.activitypods-frontend.priority=10"
+      - "traefik.http.services.activitypods-frontend.loadbalancer.server.port=5000"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # =============================================================
+  # Arena - Job Queue Monitor
+  # =============================================================
+  # Optional monitoring for background jobs
+  # =============================================================
+  arena:
+    image: activitypods/arena:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-lab}_arena
+
+    profiles:
+      - activitypods-monitoring
+
+    depends_on:
+      - redis
+
+    environment:
+      REDIS_HOST: redis
+
+    networks:
+      - app-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+    restart: unless-stopped
+    logging:
+      <<: *activitypods-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.arena.rule=Host(`arena.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.arena.entrypoints=websecure"
+      - "traefik.http.routers.arena.tls=true"
+      - "traefik.http.routers.arena.tls.certresolver=letsencrypt"
+      - "traefik.http.services.arena.loadbalancer.server.port=4567"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  fuseki_password:
+    file: ./secrets/fuseki_password
+  activitypods_cookie_secret:
+    file: ./secrets/activitypods_cookie_secret
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  fuseki_data:
+    driver: local
+  activitypods_uploads:
+    driver: local
+
+# ==============================================================
+# Networks (reference existing)
+# ==============================================================
+
+networks:
+  app-internal:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-lab}_app-internal
+  proxy-external:
+    external: true
+    name: ${COMPOSE_PROJECT_NAME:-lab}_proxy-external

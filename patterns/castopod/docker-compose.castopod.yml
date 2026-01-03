@@ -1,0 +1,159 @@
+# ==============================================================
+# Castopod - Federated Podcasting - Docker Compose Fragment
+# ==============================================================
+# Podcasting 2.0 platform with ActivityPub federation
+#
+# Example Version: 1.0
+# Documentation: patterns/castopod/README.md
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f patterns/castopod/docker-compose.castopod.yml \
+#                  --profile castopod --profile mysql --profile redis up -d
+#
+# Prerequisites:
+#   1. Foundation running (Traefik)
+#   2. MySQL and Redis profiles enabled
+#   3. Configure .env with CASTOPOD_* variables
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-castopod-healthcheck: &castopod-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 60s
+
+x-castopod-logging: &castopod-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # =============================================================
+  # Castopod - Podcast Hosting Platform
+  # =============================================================
+  # Podcasting 2.0 features:
+  # - Value4Value (Bitcoin/Lightning)
+  # - Chapters, Transcripts, Soundbites
+  # - ActivityPub federation
+  # =============================================================
+  castopod:
+    image: castopod/castopod:latest
+    container_name: castopod
+
+    profiles:
+      - castopod
+      - full
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - castopod_analytics_salt
+      - mysql_root_password
+
+    environment:
+      # Base URL (required)
+      CP_BASEURL: https://podcast.${DOMAIN:-example.com}
+
+      # Analytics salt (required)
+      CP_ANALYTICS_SALT_FILE: /run/secrets/castopod_analytics_salt
+
+      # Database
+      CP_DATABASE_HOSTNAME: mysql
+      CP_DATABASE_NAME: castopod
+      CP_DATABASE_USERNAME: castopod
+      CP_DATABASE_PASSWORD_FILE: /run/secrets/mysql_root_password
+      CP_DATABASE_PREFIX: cp_
+
+      # Cache (Redis)
+      CP_CACHE_HANDLER: redis
+      CP_REDIS_HOST: redis
+      CP_REDIS_PORT: 6379
+
+      # Email (optional)
+      CP_EMAIL_SMTP_HOST: ${SMTP_HOST:-}
+      CP_EMAIL_FROM: ${CASTOPOD_FROM_EMAIL:-podcast@${DOMAIN:-example.com}}
+      CP_EMAIL_SMTP_USERNAME: ${SMTP_USER:-}
+      CP_EMAIL_SMTP_PASSWORD: ${SMTP_PASS:-}
+      CP_EMAIL_SMTP_PORT: ${SMTP_PORT:-587}
+      CP_EMAIL_SMTP_CRYPTO: ${SMTP_CRYPTO:-tls}
+
+      # Performance
+      CP_MAX_BODY_SIZE: 512M
+      CP_PHP_MEMORY_LIMIT: 512M
+      CP_TIMEOUT: 900
+
+    volumes:
+      - castopod_media:/var/www/castopod/public/media
+
+    networks:
+      - db-internal
+      - app-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    healthcheck:
+      <<: *castopod-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+
+    restart: unless-stopped
+    logging:
+      <<: *castopod-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.castopod.rule=Host(`podcast.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.castopod.entrypoints=websecure"
+      - "traefik.http.routers.castopod.tls=true"
+      - "traefik.http.routers.castopod.tls.certresolver=letsencrypt"
+      - "traefik.http.services.castopod.loadbalancer.server.port=8080"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  castopod_analytics_salt:
+    file: ./secrets/castopod_analytics_salt
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  castopod_media:
+    driver: local
+
+# ==============================================================
+# Networks (reference existing)
+# ==============================================================
+
+networks:
+  db-internal:
+    external: true
+  app-internal:
+    external: true
+  proxy-external:
+    external: true

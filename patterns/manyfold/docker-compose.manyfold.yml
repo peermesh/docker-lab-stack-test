@@ -1,0 +1,157 @@
+# ==============================================================
+# Manyfold - 3D Model Management - Docker Compose Fragment
+# ==============================================================
+# Self-hosted 3D model library with ActivityPub federation
+# Fills the critical gap for 3D content in the Fediverse
+#
+# Documentation: patterns/manyfold/README.md
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f patterns/manyfold/docker-compose.manyfold.yml \
+#                  --profile manyfold --profile postgresql --profile redis up -d
+#
+# Prerequisites:
+#   1. Foundation running (Traefik)
+#   2. PostgreSQL and Redis profiles enabled
+#   3. Configure .env with MANYFOLD_* variables
+#   4. Generate secret: docker run --rm lscr.io/linuxserver/manyfold:latest generate-secret
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-manyfold-healthcheck: &manyfold-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 60s
+
+x-manyfold-logging: &manyfold-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # =============================================================
+  # Manyfold - 3D Model Manager
+  # =============================================================
+  # Self-hosted digital asset manager for 3D print files
+  # ActivityPub federation with f3di namespace
+  # Supports STL, OBJ, 3MF, STEP, and more
+  # =============================================================
+  manyfold:
+    image: lscr.io/linuxserver/manyfold:latest
+    container_name: manyfold
+
+    profiles:
+      - manyfold
+      - full
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - manyfold_secret_key
+      - postgres_password
+
+    environment:
+      # LinuxServer.io settings
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-UTC}
+
+      # Database URL (PostgreSQL)
+      DATABASE_URL: postgres://manyfold:${MANYFOLD_DB_PASSWORD:-manyfold}@postgres:5432/manyfold
+
+      # Redis URL
+      REDIS_URL: redis://redis:6379/1
+
+      # Secret key for sessions
+      SECRET_KEY_BASE_FILE: /run/secrets/manyfold_secret_key
+
+      # Federation (ActivityPub)
+      FEDERATION: enabled
+      PUBLIC_HOSTNAME: models.${DOMAIN:-example.com}
+      PUBLIC_PORT: 443
+      HTTPS_ONLY: "true"
+
+      # Rails settings
+      RAILS_SERVE_STATIC_FILES: "true"
+      RAILS_LOG_TO_STDOUT: "true"
+
+    volumes:
+      # Config directory
+      - manyfold_config:/config
+      # 3D model libraries (mount your collections here)
+      - manyfold_libraries:/libraries
+
+    networks:
+      - db-internal
+      - app-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+    healthcheck:
+      <<: *manyfold-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:3214/health || exit 1"]
+
+    restart: unless-stopped
+    logging:
+      <<: *manyfold-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.manyfold.rule=Host(`models.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.manyfold.entrypoints=websecure"
+      - "traefik.http.routers.manyfold.tls=true"
+      - "traefik.http.routers.manyfold.tls.certresolver=letsencrypt"
+      - "traefik.http.services.manyfold.loadbalancer.server.port=3214"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  manyfold_secret_key:
+    file: ./secrets/manyfold_secret_key
+  postgres_password:
+    file: ./secrets/postgres_password
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  manyfold_config:
+    driver: local
+  manyfold_libraries:
+    driver: local
+
+# ==============================================================
+# Networks (reference existing)
+# ==============================================================
+
+networks:
+  db-internal:
+    external: true
+  app-internal:
+    external: true
+  proxy-external:
+    external: true

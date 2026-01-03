@@ -1,0 +1,136 @@
+# ==============================================================
+# GoToSocial - Lightweight Microblogging - Docker Compose Fragment
+# ==============================================================
+# Ultra-lightweight ActivityPub microblogging platform
+# Alternative to Mastodon with 50-100MB RAM footprint
+#
+# Pattern Version: 1.0
+# Documentation: patterns/gotosocial/README.md
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f patterns/gotosocial/docker-compose.gotosocial.yml \
+#                  --profile gotosocial up -d
+#
+# Prerequisites:
+#   1. Foundation running (Traefik)
+#   2. Configure .env with DOMAIN variable
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-gotosocial-healthcheck: &gotosocial-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 120s
+
+x-gotosocial-logging: &gotosocial-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # =============================================================
+  # GoToSocial - Lightweight Fediverse Server
+  # =============================================================
+  # Ultra-lightweight ActivityPub server
+  # 50-100MB RAM vs 2-4GB for Mastodon
+  # SQLite by default, PostgreSQL optional
+  # =============================================================
+  gotosocial:
+    image: superseriousbusiness/gotosocial:latest
+    container_name: gotosocial
+    user: "1000:1000"
+
+    profiles:
+      - gotosocial
+      - full
+
+    environment:
+      # Required: Your instance hostname
+      GTS_HOST: social.${DOMAIN:-example.com}
+
+      # Protocol (Traefik handles TLS)
+      GTS_PROTOCOL: https
+
+      # Bind address
+      GTS_BIND_ADDRESS: 0.0.0.0
+      GTS_PORT: 8080
+
+      # Database (SQLite default, or use PostgreSQL)
+      GTS_DB_TYPE: sqlite
+      GTS_DB_ADDRESS: /gotosocial/storage/sqlite.db
+
+      # Storage
+      GTS_STORAGE_LOCAL_BASE_PATH: /gotosocial/storage
+
+      # Let's Encrypt disabled (Traefik handles TLS)
+      GTS_LETSENCRYPT_ENABLED: "false"
+
+      # Timezone
+      TZ: ${TZ:-UTC}
+
+      # Instance settings
+      GTS_INSTANCE_EXPOSE_PEERS: "true"
+      GTS_INSTANCE_EXPOSE_SUSPENDED: "false"
+      GTS_ACCOUNTS_REGISTRATION_OPEN: "false"
+
+      # Federation
+      GTS_INSTANCE_FEDERATION_MODE: allowlist
+
+      # Logging
+      GTS_LOG_LEVEL: info
+
+    volumes:
+      - gotosocial_data:/gotosocial/storage
+
+    networks:
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+
+    healthcheck:
+      <<: *gotosocial-healthcheck
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/api/v1/instance || exit 1"]
+
+    restart: unless-stopped
+    logging:
+      <<: *gotosocial-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gotosocial.rule=Host(`social.${DOMAIN:-example.com}`)"
+      - "traefik.http.routers.gotosocial.entrypoints=websecure"
+      - "traefik.http.routers.gotosocial.tls=true"
+      - "traefik.http.routers.gotosocial.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gotosocial.loadbalancer.server.port=8080"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  gotosocial_data:
+    driver: local
+
+# ==============================================================
+# Networks (reference existing)
+# ==============================================================
+
+networks:
+  proxy-external:
+    external: true

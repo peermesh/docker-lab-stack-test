@@ -1,0 +1,1014 @@
+# ==============================================================
+# Docker Lab Stack Test - Main Orchestration File
+# ==============================================================
+#
+# This compose file imports the PeerMesh Docker Lab foundation
+# and layers application-specific compose fragments on top.
+#
+# ARCHITECTURE:
+#   Foundation (from docker-lab):
+#     - Traefik reverse proxy
+#     - Docker socket proxy
+#     - Networks (proxy-external, db-internal, app-internal)
+#     - Database profiles (postgresql, mysql, mongodb, redis, minio)
+#
+#   Applications (from this file):
+#     - gotosocial    - Lightweight ActivityPub microblogging
+#     - writefreely   - Minimalist ActivityPub blogging
+#     - peertube      - Federated video streaming
+#     - listmonk      - Newsletter/mailing list manager
+#     - rss2bsky      - RSS to Bluesky syndication
+#     - activitypods  - Solid + ActivityPub unified pods
+#     - n8n           - Workflow automation
+#     - pixelfed      - Federated image sharing
+#     - castopod      - Federated podcasting (Podcasting 2.0)
+#     - manyfold      - 3D model library with ActivityPub
+#
+# USAGE:
+#   # Start foundation + specific app
+#   docker compose --profile gotosocial up -d
+#
+#   # Start foundation + multiple apps
+#   docker compose --profile gotosocial --profile writefreely up -d
+#
+#   # Start everything
+#   docker compose --profile full up -d
+#
+# PREREQUISITES:
+#   1. Copy .env.example to .env
+#   2. Run ./scripts/generate-secrets.sh
+#   3. Configure domain and application settings
+#
+# ==============================================================
+
+# ==============================================================
+# Include Foundation from Docker Lab
+# ==============================================================
+# The foundation provides:
+#   - Traefik (reverse proxy, TLS termination)
+#   - Docker socket proxy (secure Docker API)
+#   - Networks (proxy-external, db-internal, app-internal)
+#   - Database services (PostgreSQL, MySQL, MongoDB, Redis, MinIO)
+# ==============================================================
+
+include:
+  # Foundation infrastructure
+  - path: ${DOCKER_LAB_PATH:-../peer-mesh-docker-lab}/docker-compose.yml
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-app-healthcheck: &app-healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 60s
+
+x-app-logging: &app-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-resource-small: &resource-small
+  deploy:
+    resources:
+      limits:
+        memory: 256M
+      reservations:
+        memory: 64M
+
+x-resource-medium: &resource-medium
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+      reservations:
+        memory: 256M
+
+x-resource-large: &resource-large
+  deploy:
+    resources:
+      limits:
+        memory: 1G
+      reservations:
+        memory: 512M
+
+# ==============================================================
+# Services - Application Layer
+# ==============================================================
+
+services:
+  # ============================================================
+  # GoToSocial - Lightweight ActivityPub Microblogging
+  # ============================================================
+  # Ultra-lightweight Fediverse server (50-100MB RAM)
+  # SQLite by default, federates with Mastodon, Pleroma, etc.
+  # ============================================================
+  gotosocial:
+    image: superseriousbusiness/gotosocial:${GOTOSOCIAL_VERSION:-latest}
+    container_name: dlst_gotosocial
+    user: "1000:1000"
+
+    profiles:
+      - gotosocial
+      - fediverse
+      - full
+
+    environment:
+      GTS_HOST: social.${DOMAIN}
+      GTS_PROTOCOL: https
+      GTS_BIND_ADDRESS: 0.0.0.0
+      GTS_PORT: 8080
+      GTS_DB_TYPE: sqlite
+      GTS_DB_ADDRESS: /gotosocial/storage/sqlite.db
+      GTS_STORAGE_LOCAL_BASE_PATH: /gotosocial/storage
+      GTS_LETSENCRYPT_ENABLED: "false"
+      GTS_INSTANCE_EXPOSE_PEERS: "true"
+      GTS_INSTANCE_EXPOSE_SUSPENDED: "false"
+      GTS_ACCOUNTS_REGISTRATION_OPEN: "${GOTOSOCIAL_REGISTRATION_OPEN:-false}"
+      GTS_INSTANCE_FEDERATION_MODE: ${GOTOSOCIAL_FEDERATION_MODE:-allowlist}
+      GTS_LOG_LEVEL: ${GOTOSOCIAL_LOG_LEVEL:-info}
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      - dlst_gotosocial_data:/gotosocial/storage
+
+    networks:
+      - proxy-external
+
+    <<: *resource-small
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/api/v1/instance || exit 1"]
+      start_period: 120s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gotosocial.rule=Host(`social.${DOMAIN}`)"
+      - "traefik.http.routers.gotosocial.entrypoints=websecure"
+      - "traefik.http.routers.gotosocial.tls=true"
+      - "traefik.http.routers.gotosocial.tls.certresolver=letsencrypt"
+      - "traefik.http.services.gotosocial.loadbalancer.server.port=8080"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # WriteFreely - Minimalist ActivityPub Blogging
+  # ============================================================
+  # Distraction-free writing platform (128MB RAM)
+  # Native ActivityPub federation, requires MySQL
+  # ============================================================
+  writefreely:
+    image: writeas/writefreely:${WRITEFREELY_VERSION:-latest}
+    container_name: dlst_writefreely
+
+    profiles:
+      - writefreely
+      - fediverse
+      - full
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+    secrets:
+      - mysql_root_password
+
+    environment:
+      WRITEFREELY_DATABASE_TYPE: mysql
+      WRITEFREELY_DATABASE_NAME: writefreely
+      WRITEFREELY_DATABASE_USER: writefreely
+      WRITEFREELY_DATABASE_PASSWORD_FILE: /run/secrets/mysql_root_password
+      WRITEFREELY_DATABASE_HOST: mysql
+      WRITEFREELY_DATABASE_PORT: 3306
+      WRITEFREELY_SITE_NAME: ${WRITEFREELY_SITE_NAME:-Blog}
+      WRITEFREELY_HOST: https://blog.${DOMAIN}
+      WRITEFREELY_FEDERATION: "true"
+      WRITEFREELY_PUBLIC_STATS: "true"
+      WRITEFREELY_PRIVATE: "false"
+      WRITEFREELY_SINGLE_USER: ${WRITEFREELY_SINGLE_USER:-false}
+
+    volumes:
+      - dlst_writefreely_data:/go/keys
+      - ./config/writefreely/config.ini:/go/config.ini:ro
+
+    networks:
+      - db-internal
+      - proxy-external
+
+    <<: *resource-small
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.writefreely.rule=Host(`blog.${DOMAIN}`)"
+      - "traefik.http.routers.writefreely.entrypoints=websecure"
+      - "traefik.http.routers.writefreely.tls=true"
+      - "traefik.http.routers.writefreely.tls.certresolver=letsencrypt"
+      - "traefik.http.services.writefreely.loadbalancer.server.port=8080"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # PeerTube - Federated Video Streaming
+  # ============================================================
+  # ActivityPub-federated video platform with P2P delivery
+  # Requires PostgreSQL and its own Redis instance
+  # ============================================================
+  peertube:
+    image: chocobozzz/peertube:${PEERTUBE_VERSION:-production-bookworm}
+    container_name: dlst_peertube
+
+    profiles:
+      - peertube
+      - fediverse
+      - full
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      peertube-redis:
+        condition: service_healthy
+
+    environment:
+      PEERTUBE_DB_USERNAME: peertube
+      PEERTUBE_DB_PASSWORD: ${PEERTUBE_DB_PASSWORD}
+      PEERTUBE_DB_HOSTNAME: postgres
+      PEERTUBE_DB_NAME: peertube
+      PEERTUBE_REDIS_HOSTNAME: peertube-redis
+      PEERTUBE_WEBSERVER_HOSTNAME: peertube.${DOMAIN}
+      PEERTUBE_WEBSERVER_PORT: 443
+      PEERTUBE_WEBSERVER_HTTPS: "true"
+      PEERTUBE_TRUST_PROXY: '["127.0.0.1", "loopback", "172.16.0.0/12"]'
+      PEERTUBE_ADMIN_EMAIL: ${ADMIN_EMAIL}
+      PEERTUBE_SECRET: ${PEERTUBE_SECRET}
+      PEERTUBE_INSTANCE_NO_TELEMETRY: "true"
+
+    volumes:
+      - dlst_peertube_data:/data
+      - dlst_peertube_config:/config
+
+    networks:
+      - proxy-external
+      - db-internal
+      - peertube-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -fSs http://localhost:9000/api/v1/config || exit 1"]
+      start_period: 120s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.peertube.rule=Host(`peertube.${DOMAIN}`)"
+      - "traefik.http.routers.peertube.entrypoints=websecure"
+      - "traefik.http.routers.peertube.tls=true"
+      - "traefik.http.routers.peertube.tls.certresolver=letsencrypt"
+      - "traefik.http.services.peertube.loadbalancer.server.port=9000"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  peertube-redis:
+    image: redis:7-alpine
+    container_name: dlst_peertube_redis
+
+    profiles:
+      - peertube
+      - fediverse
+      - full
+
+    volumes:
+      - dlst_peertube_redis:/data
+
+    networks:
+      - peertube-internal
+
+    <<: *resource-small
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+  # ============================================================
+  # Listmonk - Newsletter/Mailing List Manager
+  # ============================================================
+  # Self-hosted newsletter manager with REST API
+  # Requires PostgreSQL
+  # ============================================================
+  listmonk:
+    image: listmonk/listmonk:${LISTMONK_VERSION:-latest}
+    container_name: dlst_listmonk
+
+    profiles:
+      - listmonk
+      - newsletter
+      - full
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    secrets:
+      - listmonk_db_password
+
+    environment:
+      LISTMONK_db__host: postgres
+      LISTMONK_db__port: 5432
+      LISTMONK_db__user: listmonk
+      LISTMONK_db__password_file: /run/secrets/listmonk_db_password
+      LISTMONK_db__database: listmonk
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_app__admin_username: ${LISTMONK_ADMIN_USER:-admin}
+      LISTMONK_app__admin_password: ${LISTMONK_ADMIN_PASSWORD}
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      - dlst_listmonk_uploads:/listmonk/uploads
+      - dlst_listmonk_static:/listmonk/static
+
+    networks:
+      - db-internal
+      - proxy-external
+
+    <<: *resource-small
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9000/api/health || exit 1"]
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.listmonk.rule=Host(`newsletter.${DOMAIN}`)"
+      - "traefik.http.routers.listmonk.entrypoints=websecure"
+      - "traefik.http.routers.listmonk.tls=true"
+      - "traefik.http.routers.listmonk.tls.certresolver=letsencrypt"
+      - "traefik.http.services.listmonk.loadbalancer.server.port=9000"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # rss2bsky - RSS to Bluesky Syndication
+  # ============================================================
+  # Lightweight cron-based RSS to Bluesky cross-posting
+  # Background worker, no Traefik routing needed
+  # ============================================================
+  rss2bsky:
+    build:
+      context: ./apps/rss2bsky
+      dockerfile: Dockerfile
+    container_name: dlst_rss2bsky
+
+    profiles:
+      - rss2bsky
+      - syndication
+      - full
+
+    environment:
+      R2B_HANDLE: ${RSS2BSKY_HANDLE}
+      R2B_PASSWORD: ${RSS2BSKY_APP_PASSWORD}
+      R2B_FEED_URL: ${RSS2BSKY_FEED_URL}
+      R2B_START_POST_DATE: ${RSS2BSKY_START_DATE:-}
+      RSS2BSKY_CRON: ${RSS2BSKY_CRON:-*/15 * * * *}
+      TZ: ${TZ:-UTC}
+
+    volumes:
+      - dlst_rss2bsky_data:/app/data
+
+    networks:
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 16M
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=false"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # ActivityPods - Solid + ActivityPub Unified Pods
+  # ============================================================
+  # SSI-first canonical data store with native ActivityPub
+  # Requires Redis, Fuseki (included), 4GB RAM minimum
+  # ============================================================
+  fuseki:
+    image: semapps/jena-fuseki-webacl:${FUSEKI_VERSION:-latest}
+    container_name: dlst_fuseki
+
+    profiles:
+      - activitypods
+      - solid
+      - full
+
+    secrets:
+      - fuseki_password
+
+    environment:
+      ADMIN_PASSWORD_FILE: /run/secrets/fuseki_password
+      JAVA_OPTIONS: "-Xmx3g -Xms1g"
+
+    volumes:
+      - dlst_fuseki_data:/fuseki
+
+    networks:
+      - activitypods-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:3030/$/ping || exit 1"]
+      start_period: 120s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+  activitypods-backend:
+    image: activitypods/backend:${ACTIVITYPODS_VERSION:-latest}
+    container_name: dlst_activitypods_backend
+
+    profiles:
+      - activitypods
+      - solid
+      - full
+
+    depends_on:
+      fuseki:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - activitypods_cookie_secret
+      - fuseki_password
+
+    environment:
+      SEMAPPS_INSTANCE_NAME: ${ACTIVITYPODS_INSTANCE_NAME:-Pod Provider}
+      SEMAPPS_INSTANCE_DESCRIPTION: ${ACTIVITYPODS_INSTANCE_DESCRIPTION:-Self-hosted Solid+ActivityPub pods}
+      SEMAPPS_HOME_URL: https://pods.${DOMAIN}
+      SEMAPPS_FRONTEND_URL: https://pods.${DOMAIN}
+      SEMAPPS_SPARQL_ENDPOINT: http://fuseki:3030/
+      SEMAPPS_MAIN_DATASET: localData
+      SEMAPPS_JENA_USER: admin
+      SEMAPPS_JENA_PASSWORD_FILE: /run/secrets/fuseki_password
+      SEMAPPS_REDIS_URL: redis://redis:6379/0
+      SEMAPPS_COOKIE_SECRET_FILE: /run/secrets/activitypods_cookie_secret
+      SEMAPPS_MAPBOX_ACCESS_TOKEN: ${ACTIVITYPODS_MAPBOX_TOKEN:-}
+      SEMAPPS_FROM_EMAIL: ${ACTIVITYPODS_FROM_EMAIL:-noreply@${DOMAIN}}
+      SEMAPPS_FROM_NAME: ${ACTIVITYPODS_FROM_NAME:-Pods}
+      SEMAPPS_SMTP_HOST: ${SMTP_HOST:-}
+      SEMAPPS_SMTP_PORT: ${SMTP_PORT:-587}
+      SEMAPPS_SMTP_USER: ${SMTP_USER:-}
+      SEMAPPS_SMTP_PASS: ${SMTP_PASS:-}
+      SEMAPPS_SMTP_SECURE: ${SMTP_SECURE:-false}
+
+    volumes:
+      - dlst_activitypods_uploads:/app/uploads
+
+    networks:
+      - activitypods-internal
+      - app-internal
+      - proxy-external
+
+    <<: *resource-large
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/.well-known/webfinger?resource=acct:test@pods.${DOMAIN} || exit 1"]
+      start_period: 180s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.activitypods-backend.rule=Host(`pods.${DOMAIN}`) && PathPrefix(`/`)"
+      - "traefik.http.routers.activitypods-backend.entrypoints=websecure"
+      - "traefik.http.routers.activitypods-backend.tls=true"
+      - "traefik.http.routers.activitypods-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.activitypods-backend.priority=1"
+      - "traefik.http.services.activitypods-backend.loadbalancer.server.port=3000"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  activitypods-frontend:
+    image: activitypods/frontend:${ACTIVITYPODS_VERSION:-latest}
+    container_name: dlst_activitypods_frontend
+
+    profiles:
+      - activitypods
+      - solid
+      - full
+
+    depends_on:
+      - activitypods-backend
+
+    environment:
+      REACT_APP_CONFIG_URL: https://pods.${DOMAIN}/.well-known/config.json
+
+    networks:
+      - proxy-external
+
+    <<: *resource-small
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:5000/ || exit 1"]
+      start_period: 30s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.activitypods-frontend.rule=Host(`pods.${DOMAIN}`) && PathPrefix(`/static`, `/manifest.json`, `/favicon`)"
+      - "traefik.http.routers.activitypods-frontend.entrypoints=websecure"
+      - "traefik.http.routers.activitypods-frontend.tls=true"
+      - "traefik.http.routers.activitypods-frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.activitypods-frontend.priority=10"
+      - "traefik.http.services.activitypods-frontend.loadbalancer.server.port=5000"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # n8n - Workflow Automation
+  # ============================================================
+  # Self-hosted workflow automation for POSSE syndication
+  # Requires PostgreSQL
+  # ============================================================
+  n8n:
+    image: n8nio/n8n:${N8N_VERSION:-latest}
+    container_name: dlst_n8n
+
+    profiles:
+      - n8n
+      - automation
+      - full
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    secrets:
+      - n8n_encryption_key
+      - postgres_password
+
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: n8n
+      DB_POSTGRESDB_PASSWORD_FILE: /run/secrets/postgres_password
+      N8N_ENCRYPTION_KEY_FILE: /run/secrets/n8n_encryption_key
+      N8N_HOST: n8n.${DOMAIN}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: https
+      WEBHOOK_URL: https://n8n.${DOMAIN}/
+      N8N_SECURE_COOKIE: "true"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      GENERIC_TIMEZONE: ${TZ:-UTC}
+      N8N_IMPORT_EXPORT_DIR: /home/node/workflows
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: 168
+      N8N_DIAGNOSTICS_ENABLED: "false"
+
+    volumes:
+      - dlst_n8n_data:/home/node/.n8n
+      - ./apps/n8n/workflows:/home/node/workflows:ro
+
+    networks:
+      - db-internal
+      - proxy-external
+
+    <<: *resource-medium
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5678/healthz || exit 1"]
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls=true"
+      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # Pixelfed - Federated Image Sharing
+  # ============================================================
+  # Instagram alternative with ActivityPub federation
+  # Requires MySQL and Redis
+  # ============================================================
+  pixelfed:
+    image: zknt/pixelfed:${PIXELFED_VERSION:-latest}
+    container_name: dlst_pixelfed
+
+    profiles:
+      - pixelfed
+      - fediverse
+      - full
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - pixelfed_app_key
+      - mysql_root_password
+
+    environment:
+      APP_NAME: ${PIXELFED_APP_NAME:-Photos}
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: https://photos.${DOMAIN}
+      APP_DOMAIN: photos.${DOMAIN}
+      APP_KEY_FILE: /run/secrets/pixelfed_app_key
+      ADMIN_DOMAIN: photos.${DOMAIN}
+      INSTANCE_DESCRIPTION: ${PIXELFED_DESCRIPTION:-Federated photo sharing}
+      INSTANCE_PUBLIC_HASHTAGS: "false"
+      INSTANCE_CONTACT_EMAIL: ${ADMIN_EMAIL}
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pixelfed
+      DB_USERNAME: pixelfed
+      DB_PASSWORD_FILE: /run/secrets/mysql_root_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_DRIVER: redis
+      SESSION_DRIVER: redis
+      QUEUE_DRIVER: redis
+      ACTIVITY_PUB: "true"
+      AP_REMOTE_FOLLOW: "true"
+      AP_INBOX: "true"
+      AP_OUTBOX: "true"
+      AP_SHAREDINBOX: "true"
+      FILESYSTEM_DRIVER: local
+      FILESYSTEM_CLOUD: local
+      IMAGE_DRIVER: imagick
+      MAX_PHOTO_SIZE: 15000
+      MAX_ALBUM_LENGTH: 10
+      TRUST_PROXIES: "*"
+      LOG_CHANNEL: stderr
+
+    volumes:
+      - dlst_pixelfed_storage:/var/www/storage
+
+    networks:
+      - db-internal
+      - app-internal
+      - proxy-external
+
+    <<: *resource-large
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost/api/nodeinfo/2.0.json || exit 1"]
+      start_period: 120s
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pixelfed.rule=Host(`photos.${DOMAIN}`)"
+      - "traefik.http.routers.pixelfed.entrypoints=websecure"
+      - "traefik.http.routers.pixelfed.tls=true"
+      - "traefik.http.routers.pixelfed.tls.certresolver=letsencrypt"
+      - "traefik.http.services.pixelfed.loadbalancer.server.port=80"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  pixelfed-worker:
+    image: zknt/pixelfed:${PIXELFED_VERSION:-latest}
+    container_name: dlst_pixelfed_worker
+
+    profiles:
+      - pixelfed
+      - fediverse
+      - full
+
+    depends_on:
+      - pixelfed
+
+    command: php artisan horizon
+
+    secrets:
+      - pixelfed_app_key
+      - mysql_root_password
+
+    environment:
+      APP_ENV: production
+      APP_KEY_FILE: /run/secrets/pixelfed_app_key
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: pixelfed
+      DB_USERNAME: pixelfed
+      DB_PASSWORD_FILE: /run/secrets/mysql_root_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_DRIVER: redis
+
+    volumes:
+      - dlst_pixelfed_storage:/var/www/storage
+
+    networks:
+      - db-internal
+      - app-internal
+
+    <<: *resource-medium
+
+    restart: unless-stopped
+    logging: *app-logging
+
+  # ============================================================
+  # Castopod - Federated Podcasting (Podcasting 2.0)
+  # ============================================================
+  # Podcast hosting with Value4Value, chapters, ActivityPub
+  # Requires MySQL and Redis
+  # ============================================================
+  castopod:
+    image: castopod/castopod:${CASTOPOD_VERSION:-latest}
+    container_name: dlst_castopod
+
+    profiles:
+      - castopod
+      - fediverse
+      - full
+
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - castopod_analytics_salt
+      - mysql_root_password
+
+    environment:
+      CP_BASEURL: https://podcast.${DOMAIN}
+      CP_ANALYTICS_SALT_FILE: /run/secrets/castopod_analytics_salt
+      CP_DATABASE_HOSTNAME: mysql
+      CP_DATABASE_NAME: castopod
+      CP_DATABASE_USERNAME: castopod
+      CP_DATABASE_PASSWORD_FILE: /run/secrets/mysql_root_password
+      CP_DATABASE_PREFIX: cp_
+      CP_CACHE_HANDLER: redis
+      CP_REDIS_HOST: redis
+      CP_REDIS_PORT: 6379
+      CP_EMAIL_SMTP_HOST: ${SMTP_HOST:-}
+      CP_EMAIL_FROM: ${CASTOPOD_FROM_EMAIL:-podcast@${DOMAIN}}
+      CP_EMAIL_SMTP_USERNAME: ${SMTP_USER:-}
+      CP_EMAIL_SMTP_PASSWORD: ${SMTP_PASS:-}
+      CP_EMAIL_SMTP_PORT: ${SMTP_PORT:-587}
+      CP_EMAIL_SMTP_CRYPTO: ${SMTP_CRYPTO:-tls}
+      CP_MAX_BODY_SIZE: 512M
+      CP_PHP_MEMORY_LIMIT: 512M
+      CP_TIMEOUT: 900
+
+    volumes:
+      - dlst_castopod_media:/var/www/castopod/public/media
+
+    networks:
+      - db-internal
+      - app-internal
+      - proxy-external
+
+    <<: *resource-medium
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.castopod.rule=Host(`podcast.${DOMAIN}`)"
+      - "traefik.http.routers.castopod.entrypoints=websecure"
+      - "traefik.http.routers.castopod.tls=true"
+      - "traefik.http.routers.castopod.tls.certresolver=letsencrypt"
+      - "traefik.http.services.castopod.loadbalancer.server.port=8080"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+  # ============================================================
+  # Manyfold - 3D Model Library with ActivityPub
+  # ============================================================
+  # Self-hosted 3D model manager for makers/creators
+  # Requires PostgreSQL and Redis
+  # ============================================================
+  manyfold:
+    image: lscr.io/linuxserver/manyfold:${MANYFOLD_VERSION:-latest}
+    container_name: dlst_manyfold
+
+    profiles:
+      - manyfold
+      - fediverse
+      - full
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    secrets:
+      - manyfold_secret_key
+      - postgres_password
+
+    environment:
+      PUID: 1000
+      PGID: 1000
+      TZ: ${TZ:-UTC}
+      DATABASE_URL: postgres://manyfold:${MANYFOLD_DB_PASSWORD}@postgres:5432/manyfold
+      REDIS_URL: redis://redis:6379/1
+      SECRET_KEY_BASE_FILE: /run/secrets/manyfold_secret_key
+      FEDERATION: enabled
+      PUBLIC_HOSTNAME: models.${DOMAIN}
+      PUBLIC_PORT: 443
+      HTTPS_ONLY: "true"
+      RAILS_SERVE_STATIC_FILES: "true"
+      RAILS_LOG_TO_STDOUT: "true"
+
+    volumes:
+      - dlst_manyfold_config:/config
+      - dlst_manyfold_libraries:/libraries
+
+    networks:
+      - db-internal
+      - app-internal
+      - proxy-external
+
+    <<: *resource-large
+
+    healthcheck:
+      <<: *app-healthcheck
+      test: ["CMD-SHELL", "curl -f http://localhost:3214/health || exit 1"]
+
+    restart: unless-stopped
+    logging: *app-logging
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.manyfold.rule=Host(`models.${DOMAIN}`)"
+      - "traefik.http.routers.manyfold.entrypoints=websecure"
+      - "traefik.http.routers.manyfold.tls=true"
+      - "traefik.http.routers.manyfold.tls.certresolver=letsencrypt"
+      - "traefik.http.services.manyfold.loadbalancer.server.port=3214"
+      - "com.centurylinklabs.watchtower.enable=false"
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  # Database secrets (from foundation)
+  mysql_root_password:
+    file: ./secrets/mysql_root_password
+  postgres_password:
+    file: ./secrets/postgres_password
+
+  # Application-specific secrets
+  listmonk_db_password:
+    file: ./secrets/listmonk_db_password
+  n8n_encryption_key:
+    file: ./secrets/n8n_encryption_key
+  fuseki_password:
+    file: ./secrets/fuseki_password
+  activitypods_cookie_secret:
+    file: ./secrets/activitypods_cookie_secret
+  pixelfed_app_key:
+    file: ./secrets/pixelfed_app_key
+  castopod_analytics_salt:
+    file: ./secrets/castopod_analytics_salt
+  manyfold_secret_key:
+    file: ./secrets/manyfold_secret_key
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  # GoToSocial
+  dlst_gotosocial_data:
+    driver: local
+
+  # WriteFreely
+  dlst_writefreely_data:
+    driver: local
+
+  # PeerTube
+  dlst_peertube_data:
+    driver: local
+  dlst_peertube_config:
+    driver: local
+  dlst_peertube_redis:
+    driver: local
+
+  # Listmonk
+  dlst_listmonk_uploads:
+    driver: local
+  dlst_listmonk_static:
+    driver: local
+
+  # rss2bsky
+  dlst_rss2bsky_data:
+    driver: local
+
+  # ActivityPods
+  dlst_fuseki_data:
+    driver: local
+  dlst_activitypods_uploads:
+    driver: local
+
+  # n8n
+  dlst_n8n_data:
+    driver: local
+
+  # Pixelfed
+  dlst_pixelfed_storage:
+    driver: local
+
+  # Castopod
+  dlst_castopod_media:
+    driver: local
+
+  # Manyfold
+  dlst_manyfold_config:
+    driver: local
+  dlst_manyfold_libraries:
+    driver: local
+
+# ==============================================================
+# Networks
+# ==============================================================
+
+networks:
+  # Reference existing networks from foundation
+  proxy-external:
+    external: true
+    name: pmdl_proxy-external
+
+  db-internal:
+    external: true
+    name: pmdl_db-internal
+
+  app-internal:
+    external: true
+    name: pmdl_app-internal
+
+  # Application-specific internal networks
+  peertube-internal:
+    driver: bridge
+    name: dlst_peertube-internal
+
+  activitypods-internal:
+    driver: bridge
+    name: dlst_activitypods-internal

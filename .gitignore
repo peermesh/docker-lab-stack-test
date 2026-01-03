@@ -1,0 +1,30 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Secrets
+secrets/*
+!secrets/.gitkeep
+!secrets/README.md
+
+# Docker
+docker-compose.override.yml
+
+# Backups
+backups/*
+!backups/.gitkeep
+
+# Test output
+tests/output/
+tests/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
