@@ -59,6 +59,8 @@ generate_app_key() {
 echo "Database Passwords:"
 generate_password "mysql_root_password"
 generate_password "postgres_password"
+generate_password "mongodb_password"
+generate_password "minio_password"
 
 echo ""
 echo "Application Secrets:"

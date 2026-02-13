@@ -1,0 +1,369 @@
+{
+  "target": "docker-lab-stack-test",
+  "version": "2.1.0",
+  "patterns": [
+    "Service Mesh via Reverse Proxy",
+    "Profile-Based Composition",
+    "File-Based Secrets Management",
+    "Network Segmentation",
+    "Resource Constraints",
+    "Include Directive Pattern",
+    "Health Check Protocol",
+    "Multi-Database Strategy"
+  ],
+  "components": [
+    {
+      "name": "Traefik Reverse Proxy",
+      "component_role": "module",
+      "capability_family": "infrastructure",
+      "capability_verbs": [
+        "routing.proxy",
+        "tls.terminate",
+        "discovery.acme"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "api",
+        "ops"
+      ],
+      "build_complexity": 1,
+      "build_complexity_label": "Simple"
+    },
+    {
+      "name": "PostgreSQL Database",
+      "component_role": "module",
+      "capability_family": "infrastructure",
+      "capability_verbs": [
+        "data.store",
+        "data.query"
+      ],
+      "integration_facet": "none",
+      "interop_surfaces": [
+        "data",
+        "api"
+      ],
+      "build_complexity": 1,
+      "build_complexity_label": "Simple"
+    },
+    {
+      "name": "MySQL Database",
+      "component_role": "module",
+      "capability_family": "infrastructure",
+      "capability_verbs": [
+        "data.store",
+        "data.query"
+      ],
+      "integration_facet": "none",
+      "interop_surfaces": [
+        "data",
+        "api"
+      ],
+      "build_complexity": 1,
+      "build_complexity_label": "Simple"
+    },
+    {
+      "name": "Redis Cache",
+      "component_role": "module",
+      "capability_family": "infrastructure",
+      "capability_verbs": [
+        "data.cache",
+        "queue.enqueue"
+      ],
+      "integration_facet": "none",
+      "interop_surfaces": [
+        "data",
+        "api"
+      ],
+      "build_complexity": 1,
+      "build_complexity_label": "Simple"
+    },
+    {
+      "name": "GoToSocial",
+      "component_role": "app",
+      "capability_family": "messaging-social-graph",
+      "capability_verbs": [
+        "social.post",
+        "social.follow",
+        "federation.activitypub"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation"
+      ],
+      "build_complexity": 2,
+      "build_complexity_label": "Low"
+    },
+    {
+      "name": "WriteFreely",
+      "component_role": "app",
+      "capability_family": "messaging-social-graph",
+      "capability_verbs": [
+        "content.publish",
+        "federation.activitypub"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation"
+      ],
+      "build_complexity": 2,
+      "build_complexity_label": "Low"
+    },
+    {
+      "name": "PeerTube",
+      "component_role": "app",
+      "capability_family": "media-live",
+      "capability_verbs": [
+        "video.upload",
+        "video.stream",
+        "federation.activitypub"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation"
+      ],
+      "build_complexity": 4,
+      "build_complexity_label": "Complex"
+    },
+    {
+      "name": "Listmonk",
+      "component_role": "app",
+      "capability_family": "messaging-social-graph",
+      "capability_verbs": [
+        "email.send",
+        "subscriber.manage",
+        "campaign.create"
+      ],
+      "integration_facet": "service",
+      "interop_surfaces": [
+        "ui",
+        "api"
+      ],
+      "build_complexity": 2,
+      "build_complexity_label": "Low"
+    },
+    {
+      "name": "rss2bsky",
+      "component_role": "module",
+      "capability_family": "federation-protocol-bridges",
+      "capability_verbs": [
+        "syndication.crossPost",
+        "feed.parse"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "api",
+        "federation"
+      ],
+      "build_complexity": 2,
+      "build_complexity_label": "Low"
+    },
+    {
+      "name": "ActivityPods",
+      "component_role": "app",
+      "capability_family": "data-export-portability",
+      "capability_verbs": [
+        "data.store",
+        "identity.authenticate",
+        "federation.activitypub",
+        "federation.solid"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation",
+        "data",
+        "identity"
+      ],
+      "build_complexity": 5,
+      "build_complexity_label": "Very Complex"
+    },
+    {
+      "name": "n8n",
+      "component_role": "app",
+      "capability_family": "assistant-agent",
+      "capability_verbs": [
+        "workflow.execute",
+        "integration.connect"
+      ],
+      "integration_facet": "service",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "events"
+      ],
+      "build_complexity": 3,
+      "build_complexity_label": "Medium"
+    },
+    {
+      "name": "Pixelfed",
+      "component_role": "app",
+      "capability_family": "media-live",
+      "capability_verbs": [
+        "image.upload",
+        "image.share",
+        "federation.activitypub"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation"
+      ],
+      "build_complexity": 4,
+      "build_complexity_label": "Complex"
+    },
+    {
+      "name": "Castopod",
+      "component_role": "app",
+      "capability_family": "media-live",
+      "capability_verbs": [
+        "podcast.publish",
+        "federation.activitypub"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation"
+      ],
+      "build_complexity": 3,
+      "build_complexity_label": "Medium"
+    },
+    {
+      "name": "Manyfold",
+      "component_role": "app",
+      "capability_family": "rights-metadata",
+      "capability_verbs": [
+        "asset.catalog",
+        "federation.activitypub"
+      ],
+      "integration_facet": "protocol",
+      "interop_surfaces": [
+        "ui",
+        "api",
+        "federation"
+      ],
+      "build_complexity": 3,
+      "build_complexity_label": "Medium"
+    },
+    {
+      "name": "Secret Generator",
+      "component_role": "module",
+      "capability_family": "identity-keys",
+      "capability_verbs": [
+        "key.generate",
+        "secret.store"
+      ],
+      "integration_facet": "none",
+      "interop_surfaces": [
+        "ops"
+      ],
+      "build_complexity": 1,
+      "build_complexity_label": "Simple"
+    },
+    {
+      "name": "Test Suite Security",
+      "component_role": "module",
+      "capability_family": "infrastructure",
+      "capability_verbs": [
+        "security.audit",
+        "compliance.check"
+      ],
+      "integration_facet": "none",
+      "interop_surfaces": [
+        "ops"
+      ],
+      "build_complexity": 2,
+      "build_complexity_label": "Low"
+    },
+    {
+      "name": "Test Suite Integration",
+      "component_role": "module",
+      "capability_family": "infrastructure",
+      "capability_verbs": [
+        "integration.test",
+        "health.verify"
+      ],
+      "integration_facet": "none",
+      "interop_surfaces": [
+        "ops"
+      ],
+      "build_complexity": 2,
+      "build_complexity_label": "Low"
+    }
+  ],
+  "tech_stack": [
+    "Docker Compose",
+    "Traefik",
+    "PostgreSQL",
+    "MySQL",
+    "Redis",
+    "Go",
+    "Node.js",
+    "PHP",
+    "Python",
+    "Ruby",
+    "ActivityPub",
+    "Solid Protocol"
+  ],
+  "integrations": [
+    {
+      "name": "ActivityPub",
+      "facet": "protocol",
+      "purpose": "Federated social networking protocol"
+    },
+    {
+      "name": "Solid Protocol",
+      "facet": "protocol",
+      "purpose": "Decentralized data ownership"
+    },
+    {
+      "name": "AT Protocol (Bluesky)",
+      "facet": "protocol",
+      "purpose": "RSS syndication to Bluesky"
+    },
+    {
+      "name": "Let's Encrypt ACME",
+      "facet": "protocol",
+      "purpose": "Automatic TLS certificate provisioning"
+    },
+    {
+      "name": "SMTP",
+      "facet": "service",
+      "purpose": "Email delivery for notifications and newsletters"
+    },
+    {
+      "name": "WebTorrent",
+      "facet": "protocol",
+      "purpose": "P2P video delivery for PeerTube"
+    }
+  ],
+  "overall_complexity": 3,
+  "overall_complexity_label": "Medium",
+  "popularity": {
+    "github_stars": 0,
+    "github_forks": 0,
+    "last_commit": "2026-01-03",
+    "open_issues": 0,
+    "data_source": "github"
+  },
+  "maturity": "beta",
+  "af_level": "AF3",
+  "_review": {
+    "file": "/Users/grig/work/peermesh/repo/docker-lab-stack-test/.dev/ai/reviews/2026-01-12-20-25-24-docker-lab-stack-test-review.md",
+    "date": "2026-01-12T20:25:24.844932",
+    "commit": "551e7672ef6f92cdb4a65a67657e6448285fd6ab",
+    "branch": "main",
+    "template": "patterns v2.1.0",
+    "model": "sonnet",
+    "project": "docker-lab-stack-test",
+    "repo_path": "/Users/grig/work/peermesh/repo/docker-lab-stack-test"
+  }
+}

@@ -1,0 +1,9 @@
+# n8n Workflow Templates
+# 
+# Place exported n8n workflow JSON files here.
+# They will be available for import inside the n8n container.
+#
+# Example workflows to add:
+# - rss-to-social.json    - Post RSS items to social media
+# - backup-notify.json    - Backup completion notifications
+# - uptime-monitor.json   - Service health monitoring

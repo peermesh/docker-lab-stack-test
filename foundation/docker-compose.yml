@@ -1,0 +1,378 @@
+# ==============================================================
+# Docker Lab Foundation - Minimal Standalone Infrastructure
+# ==============================================================
+#
+# This provides the foundation layer for docker-lab-stack-test:
+#   - Traefik reverse proxy with automatic TLS
+#   - Docker socket proxy (secure Docker API access)
+#   - Database services (PostgreSQL, MySQL, MongoDB, Redis, MinIO)
+#   - Shared networks
+#
+# Normally this would be imported from peer-mesh-docker-lab, but
+# this file allows standalone deployment for testing.
+#
+# USAGE:
+#   # Foundation must be started first
+#   docker compose -f foundation/docker-compose.yml up -d
+#
+#   # Then start application stack
+#   docker compose --profile gotosocial up -d
+#
+# ==============================================================
+
+# ==============================================================
+# Extension Fields (YAML Anchors for reuse)
+# ==============================================================
+
+x-healthcheck-default: &healthcheck-default
+  interval: 30s
+  timeout: 10s
+  retries: 5
+  start_period: 30s
+
+x-logging-default: &logging-default
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# ==============================================================
+# Services
+# ==============================================================
+
+services:
+  # ============================================================
+  # Traefik - Reverse Proxy & TLS Termination
+  # ============================================================
+  traefik:
+    image: traefik:v3.0
+    container_name: pmdl_traefik
+
+    profiles:
+      - traefik
+      - minimal
+      - full
+
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=pmdl_proxy-external"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ADMIN_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - pmdl_traefik_certs:/letsencrypt
+
+    networks:
+      - proxy-external
+
+    healthcheck:
+      <<: *healthcheck-default
+      test: ["CMD", "traefik", "healthcheck"]
+
+    restart: unless-stopped
+    logging: *logging-default
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+
+  # ============================================================
+  # PostgreSQL - Primary Relational Database
+  # ============================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: pmdl_postgres
+
+    profiles:
+      - postgresql
+      - full
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+
+    secrets:
+      - postgres_password
+
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=${POSTGRES_SHARED_BUFFERS:-256MB}"
+      - "-c"
+      - "effective_cache_size=${POSTGRES_EFFECTIVE_CACHE:-768MB}"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "random_page_cost=1.1"
+
+    volumes:
+      - pmdl_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d:ro
+
+    networks:
+      - db-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${POSTGRES_MEMORY_RESERVATION:-512M}
+
+    healthcheck:
+      <<: *healthcheck-default
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+
+    restart: unless-stopped
+    logging: *logging-default
+
+  # ============================================================
+  # MySQL - Alternative Relational Database
+  # ============================================================
+  mysql:
+    image: mysql:8.0
+    container_name: pmdl_mysql
+
+    profiles:
+      - mysql
+      - full
+
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+
+    secrets:
+      - mysql_root_password
+
+    command:
+      - "--innodb-buffer-pool-size=${MYSQL_BUFFER_POOL_SIZE:-256M}"
+      - "--max-connections=${MYSQL_MAX_CONNECTIONS:-100}"
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
+      - "--default-authentication-plugin=mysql_native_password"
+
+    volumes:
+      - pmdl_mysql_data:/var/lib/mysql
+      - ./init-scripts/mysql:/docker-entrypoint-initdb.d:ro
+
+    networks:
+      - db-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: ${MYSQL_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${MYSQL_MEMORY_RESERVATION:-512M}
+
+    healthcheck:
+      <<: *healthcheck-default
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+
+    restart: unless-stopped
+    logging: *logging-default
+
+  # ============================================================
+  # MongoDB - Document Database
+  # ============================================================
+  mongodb:
+    image: mongo:6.0
+    container_name: pmdl_mongodb
+
+    profiles:
+      - mongodb
+      - full
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER:-mongo}
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongodb_password
+
+    secrets:
+      - mongodb_password
+
+    command:
+      - "mongod"
+      - "--wiredTigerCacheSizeGB"
+      - "${MONGODB_CACHE_SIZE_GB:-0.25}"
+
+    volumes:
+      - pmdl_mongodb_data:/data/db
+
+    networks:
+      - db-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: ${MONGODB_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: ${MONGODB_MEMORY_RESERVATION:-512M}
+
+    healthcheck:
+      <<: *healthcheck-default
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+
+    restart: unless-stopped
+    logging: *logging-default
+
+  # ============================================================
+  # Redis - Cache & Message Queue
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: pmdl_redis
+
+    profiles:
+      - redis
+      - full
+
+    command:
+      - "redis-server"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-128mb}"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+      - "--appendonly"
+      - "yes"
+
+    volumes:
+      - pmdl_redis_data:/data
+
+    networks:
+      - db-internal
+      - app-internal
+
+    deploy:
+      resources:
+        limits:
+          memory: ${REDIS_MEMORY_LIMIT:-256M}
+        reservations:
+          memory: ${REDIS_MEMORY_RESERVATION:-64M}
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    restart: unless-stopped
+    logging: *logging-default
+
+  # ============================================================
+  # MinIO - S3-Compatible Object Storage
+  # ============================================================
+  minio:
+    image: minio/minio:latest
+    container_name: pmdl_minio
+
+    profiles:
+      - minio
+      - full
+
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD_FILE: /run/secrets/minio_password
+
+    secrets:
+      - minio_password
+
+    command: server /data --console-address ":9001"
+
+    volumes:
+      - pmdl_minio_data:/data
+
+    networks:
+      - db-internal
+      - proxy-external
+
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+    healthcheck:
+      <<: *healthcheck-default
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+
+    restart: unless-stopped
+    logging: *logging-default
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio.rule=Host(`s3.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.minio.entrypoints=websecure"
+      - "traefik.http.routers.minio.tls=true"
+      - "traefik.http.services.minio.loadbalancer.server.port=9000"
+
+# ==============================================================
+# Secrets
+# ==============================================================
+
+secrets:
+  postgres_password:
+    file: ../secrets/postgres_password
+  mysql_root_password:
+    file: ../secrets/mysql_root_password
+  mongodb_password:
+    file: ../secrets/mongodb_password
+  minio_password:
+    file: ../secrets/minio_password
+
+# ==============================================================
+# Volumes
+# ==============================================================
+
+volumes:
+  pmdl_traefik_certs:
+    driver: local
+  pmdl_postgres_data:
+    driver: local
+  pmdl_mysql_data:
+    driver: local
+  pmdl_mongodb_data:
+    driver: local
+  pmdl_redis_data:
+    driver: local
+  pmdl_minio_data:
+    driver: local
+
+# ==============================================================
+# Networks
+# ==============================================================
+
+networks:
+  proxy-external:
+    driver: bridge
+    name: pmdl_proxy-external
+
+  db-internal:
+    driver: bridge
+    name: pmdl_db-internal
+    internal: true
+
+  app-internal:
+    driver: bridge
+    name: pmdl_app-internal
+    internal: true

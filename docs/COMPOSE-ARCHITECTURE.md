@@ -278,25 +278,17 @@ include:
   - path: ${DOCKER_LAB_PATH:-../peermesh-core}/docker-compose.yml
 ```
 
+**Standalone Mode (Default):** Uses the included `./foundation/` directory.
+**External Mode:** Set `DOCKER_LAB_PATH=../peer-mesh-docker-lab` to use external docker-lab repo.
+
 This provides:
 - Traefik reverse proxy with automatic TLS
-- Docker socket proxy for secure Docker API access
 - Pre-configured networks (proxy-external, db-internal, app-internal)
 - Database services (PostgreSQL, MySQL, MongoDB, Redis, MinIO)
 - Resource limits and health checks
 - Logging configuration
 
-The applications reference the foundation's networks as external:
-
-```yaml
-networks:
-  proxy-external:
-    external: true
-    name: pmdl_proxy-external
-  db-internal:
-    external: true
-    name: pmdl_db-internal
-```
+The networks are created by the foundation and automatically available to applications.
 
 ## Files Created
 

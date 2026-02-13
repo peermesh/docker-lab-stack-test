@@ -907,14 +907,11 @@ services:
 # ==============================================================
 # Secrets
 # ==============================================================
+# Database secrets (mysql_root_password, postgres_password, mongodb_password,
+# minio_password) are provided via the include: directive from foundation.
+# Only application-specific secrets are defined here.
 
 secrets:
-  # Database secrets (from foundation)
-  mysql_root_password:
-    file: ./secrets/mysql_root_password
-  postgres_password:
-    file: ./secrets/postgres_password
-
   # Application-specific secrets
   listmonk_db_password:
     file: ./secrets/listmonk_db_password
@@ -930,6 +927,8 @@ secrets:
     file: ./secrets/castopod_analytics_salt
   manyfold_secret_key:
     file: ./secrets/manyfold_secret_key
+  peertube_secret:
+    file: ./secrets/peertube_secret
 
 # ==============================================================
 # Volumes
@@ -989,21 +988,11 @@ volumes:
 # ==============================================================
 # Networks
 # ==============================================================
+# Foundation networks (proxy-external, db-internal, app-internal) are
+# provided via the include: directive from foundation/docker-compose.yml.
+# Only application-specific networks are defined here.
 
 networks:
-  # Reference existing networks from foundation
-  proxy-external:
-    external: true
-    name: pmdl_proxy-external
-
-  db-internal:
-    external: true
-    name: pmdl_db-internal
-
-  app-internal:
-    external: true
-    name: pmdl_app-internal
-
   # Application-specific internal networks
   peertube-internal:
     driver: bridge

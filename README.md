@@ -48,9 +48,12 @@ cd core-stack-test
 cp .env.example .env
 ./scripts/generate-secrets.sh
 
-# Minimal deployment
-docker compose --profile minimal up -d
+# Minimal deployment (foundation + GoToSocial)
+docker compose --profile traefik --profile gotosocial up -d
 ```
+
+> **Note:** This repository includes a standalone foundation layer (`./foundation/`) 
+> so it can run without the external `peer-mesh-docker-lab` dependency.
 
 ### Full Stack
 
