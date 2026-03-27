@@ -1,12 +1,12 @@
 # ==============================================================
-# Docker Lab Stack Test - Main Orchestration File
+# Core Stack Test - Main Orchestration File
 # ==============================================================
 #
-# This compose file imports the PeerMesh Docker Lab foundation
+# This compose file imports the PeerMesh Core foundation
 # and layers application-specific compose fragments on top.
 #
 # ARCHITECTURE:
-#   Foundation (from docker-lab):
+#   Foundation (from core):
 #     - Traefik reverse proxy
 #     - Docker socket proxy
 #     - Networks (proxy-external, db-internal, app-internal)
@@ -42,7 +42,7 @@
 # ==============================================================
 
 # ==============================================================
-# Include Foundation from Docker Lab
+# Include Foundation from Core
 # ==============================================================
 # The foundation provides:
 #   - Traefik (reverse proxy, TLS termination)
@@ -53,7 +53,7 @@
 
 include:
   # Foundation infrastructure
-  - path: ${DOCKER_LAB_PATH:-../peermesh-docker-lab}/docker-compose.yml
+  - path: ${DOCKER_LAB_PATH:-../peermesh-core}/docker-compose.yml
 
 # ==============================================================
 # Extension Fields (YAML Anchors for reuse)

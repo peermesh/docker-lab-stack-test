@@ -59,7 +59,7 @@ WRITEFREELY_SINGLE_USER=false
 
 ## Source
 
-Adapted from internal Docker lab patterns for public distribution.
+Adapted from internal Core patterns for public distribution.
 
 ---
 

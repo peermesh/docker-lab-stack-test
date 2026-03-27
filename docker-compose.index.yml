@@ -1,5 +1,5 @@
 # Landing Page Index Service
-# Compose fragment for serving the PeerMesh Docker Lab landing page via Traefik
+# Compose fragment for serving the PeerMesh Core landing page via Traefik
 
 services:
   index:

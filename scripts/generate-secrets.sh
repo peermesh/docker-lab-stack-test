@@ -1,12 +1,12 @@
 #!/bin/bash
-# Generate secrets for Docker Lab Stack Test
+# Generate secrets for Core Stack Test
 # Creates all required secret files for services
 
 set -e
 
 SECRETS_DIR="$(dirname "$0")/../secrets"
 
-echo "=== Docker Lab Stack Test - Secret Generation ==="
+echo "=== Core Stack Test - Secret Generation ==="
 echo ""
 
 # Create secrets directory

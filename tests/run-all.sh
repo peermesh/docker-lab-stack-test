@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# run-all.sh - Master test runner for docker-lab-stack-test
+# run-all.sh - Master test runner for core-stack-test
 #
 # Runs all test suites and produces a summary report
 #
@@ -30,7 +30,7 @@ declare -a TEST_RESULTS=()
 print_header() {
     echo ""
     echo -e "${BLUE}=======================================${NC}"
-    echo -e "${BLUE}  Docker Lab Stack Test Suite${NC}"
+    echo -e "${BLUE}  Core Stack Test Suite${NC}"
     echo -e "${BLUE}=======================================${NC}"
     echo ""
     echo "Started at: $(date '+%Y-%m-%d %H:%M:%S')"

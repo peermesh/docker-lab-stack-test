@@ -4,7 +4,7 @@
 
 - **Name**: Listmonk Newsletter Manager
 - **Version**: 1.0
-- **Source**: Docker Lab Stack Examples
+- **Source**: Core Stack Examples
 - **Created**: 2026-01-02
 
 ## Files Created

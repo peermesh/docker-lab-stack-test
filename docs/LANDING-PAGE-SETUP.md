@@ -1,10 +1,10 @@
 # Landing Page Setup
 
-Documentation for the PeerMesh Docker Lab landing page at `https://dockerlab.peermesh.org/`.
+Documentation for the PeerMesh Core landing page at `https://dockerlab.peermesh.org/`.
 
 ## Overview
 
-A static landing page that provides an index of all installed and planned services in the Docker Lab infrastructure.
+A static landing page that provides an index of all installed and planned services in the Core infrastructure.
 
 ## Files Created
 
@@ -103,7 +103,7 @@ Colors are defined as CSS custom properties in `:root`. The page automatically a
 ## File Structure
 
 ```
-docker-lab-stack-test/
+core-stack-test/
 ├── index/
 │   ├── index.html          # Landing page HTML
 │   └── styles.css          # Stylesheet

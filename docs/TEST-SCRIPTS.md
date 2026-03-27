@@ -1,6 +1,6 @@
 # Test Scripts Documentation
 
-This document describes the test scripts available for validating the docker-lab-stack-test project.
+This document describes the test scripts available for validating the core-stack-test project.
 
 ## Overview
 
@@ -247,7 +247,7 @@ All scripts use consistent colored output:
 
 ```
 ======================================
-  Docker Lab Stack Test Suite
+  Core Stack Test Suite
 ======================================
 
 Started at: 2024-01-02 15:30:00

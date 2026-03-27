@@ -1,4 +1,4 @@
-# Docker Lab Stack Test - Variations
+# Core Stack Test - Variations
 
 This directory contains different deployment configurations for testing various scenarios.
 
@@ -42,7 +42,7 @@ docker compose -f ../../docker-compose.yml -f docker-compose.override.yml up -d
 Each variation uses Docker Compose override files:
 
 ```
-docker-lab-stack-test/
+core-stack-test/
 ├── docker-compose.yml          # Base configuration (if any)
 └── variations/
     ├── minimal/

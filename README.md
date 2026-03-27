@@ -1,14 +1,14 @@
-# Docker Lab Stack Test
+# Core Stack Test
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm%20Noncommercial-lightgrey.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-24%2B-blue)](https://docker.com)
 [![Compose](https://img.shields.io/badge/Compose-v2-blue)](https://docs.docker.com/compose/)
 
-Integration test bundle for [docker-lab](https://github.com/peermesh/docker-lab) infrastructure.
+Integration test bundle for [core](https://github.com/peermesh/core) infrastructure.
 
 ## Purpose
 
-Validate security and completeness of the docker-lab boilerplate through:
+Validate security and completeness of the core boilerplate through:
 
 - **Security tests** - TLS, secrets, permissions, network isolation
 - **Integration tests** - Service connectivity, health checks, databases
@@ -42,8 +42,8 @@ Validate security and completeness of the docker-lab boilerplate through:
 Deploy core infrastructure only (Traefik, PostgreSQL, Redis):
 
 ```bash
-git clone https://github.com/peermesh/docker-lab-stack-test
-cd docker-lab-stack-test
+git clone https://github.com/peermesh/core-stack-test
+cd core-stack-test
 
 cp .env.example .env
 ./scripts/generate-secrets.sh
@@ -57,8 +57,8 @@ docker compose --profile minimal up -d
 Deploy all patterns with full monitoring:
 
 ```bash
-git clone https://github.com/peermesh/docker-lab-stack-test
-cd docker-lab-stack-test
+git clone https://github.com/peermesh/core-stack-test
+cd core-stack-test
 
 cp .env.example .env
 ./scripts/generate-secrets.sh
@@ -248,8 +248,8 @@ models.dockerlab.peermesh.org    -> YOUR_VPS_IP
 ssh user@your-vps
 
 # 2. Clone repository
-git clone https://github.com/peermesh/docker-lab-stack-test
-cd docker-lab-stack-test
+git clone https://github.com/peermesh/core-stack-test
+cd core-stack-test
 
 # 3. Configure environment
 cp .env.example .env
@@ -280,7 +280,7 @@ DOMAIN=dockerlab.peermesh.org
 ## Structure
 
 ```
-docker-lab-stack-test/
+core-stack-test/
 ├── docker-compose.yml    # Main stack definition
 ├── .env.example          # Configuration template
 ├── patterns/             # Pattern-specific configurations
@@ -341,10 +341,12 @@ docker-lab-stack-test/
 
 ## Related
 
-- [peermesh/docker-lab](https://github.com/peermesh/docker-lab) - Base infrastructure
+- [peermesh/core](https://github.com/peermesh/core) - Base infrastructure
 
 ---
 
 ## License
 
-MIT
+Original source code and documentation in this repository are licensed under the **PolyForm Noncommercial License 1.0.0** ([`LICENSE`](LICENSE)). See [`COPYRIGHT`](COPYRIGHT), [`COMMERCIAL-LICENSE.md`](COMMERCIAL-LICENSE.md) for commercial use, [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for third-party components, and [`DEPENDENCY-LICENSE-POLICY.md`](DEPENDENCY-LICENSE-POLICY.md) for how project and dependency licenses interact.
+
+Third-party components (including container images and upstream pattern applications) remain under their respective licenses; the project license does not replace them.

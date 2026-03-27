@@ -78,4 +78,4 @@ ACTIVITYPODS_INSTANCE_DESCRIPTION=Self-hosted Solid+ActivityPub pods
 ## Created
 
 - Date: 2026-01-02
-- Source: Adapted from internal docker-lab patterns
+- Source: Adapted from internal core patterns

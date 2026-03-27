@@ -1,10 +1,10 @@
-# Docker Lab Stack Test: Vision & Purpose
+# Core Stack Test: Vision & Purpose
 
 ## What This Is
 
-A test bundle (recipe) for validating the security and completeness of the [docker-lab](https://github.com/peermesh/docker-lab) infrastructure. This repository:
+A test bundle (recipe) for validating the security and completeness of the [core](https://github.com/peermesh/core) infrastructure. This repository:
 
-1. **Bundles tested patterns** from docker-lab into a deployable stack
+1. **Bundles tested patterns** from core into a deployable stack
 2. **Validates security** through automated and manual testing
 3. **Demonstrates completeness** of the boilerplate for real-world use
 4. **Enables variations** to test different configuration combinations
@@ -59,7 +59,7 @@ All tests should be:
 
 ## What's Included
 
-### Base Stack (from docker-lab)
+### Base Stack (from core)
 
 | Component | Purpose |
 |-----------|---------|
@@ -90,7 +90,7 @@ All tests should be:
 
 ## Non-Negotiable Constraints
 
-Inherited from docker-lab:
+Inherited from core:
 
 1. **Docker Compose only** - No Kubernetes
 2. **Local-first** - Works offline
@@ -106,8 +106,8 @@ Inherited from docker-lab:
 
 ```bash
 # Clone and deploy
-git clone https://github.com/peermesh/docker-lab-stack-test
-cd docker-lab-stack-test
+git clone https://github.com/peermesh/core-stack-test
+cd core-stack-test
 cp .env.example .env
 ./scripts/generate-secrets.sh
 docker compose up -d
@@ -145,13 +145,13 @@ docker compose up -d
 
 ---
 
-## Relationship to docker-lab
+## Relationship to core
 
 ```
-peermesh/docker-lab (infrastructure)
+peermesh/core (infrastructure)
          │
          ▼
-peermesh/docker-lab-stack-test (this repo)
+peermesh/core-stack-test (this repo)
          │
          ├── Tests security
          ├── Tests integration
@@ -159,7 +159,7 @@ peermesh/docker-lab-stack-test (this repo)
          └── Validates for production
 ```
 
-This repo imports from docker-lab, doesn't duplicate.
+This repo imports from core, doesn't duplicate.
 
 ---
 
@@ -190,7 +190,7 @@ This repo imports from docker-lab, doesn't duplicate.
 
 ## License
 
-MIT License - Same as docker-lab
+MIT License - Same as core
 
 ---
 

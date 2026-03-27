@@ -1,14 +1,14 @@
-# Docker Lab Stack Test - Compose Architecture
+# Core Stack Test - Compose Architecture
 
 ## Overview
 
-This document describes the architecture of the Docker Lab Stack Test project, which imports the PeerMesh Docker Lab foundation and layers 10 Fediverse/POSSE applications on top.
+This document describes the architecture of the Core Stack Test project, which imports the PeerMesh Core foundation and layers 10 Fediverse/POSSE applications on top.
 
 ## Architecture Diagram
 
 ```
 +------------------------------------------------------------------+
-|                    Docker Lab Stack Test                          |
+|                    Core Stack Test                          |
 +------------------------------------------------------------------+
 |                                                                   |
 |  +-------------------------------------------------------------+  |
@@ -39,7 +39,7 @@ This document describes the architecture of the Docker Lab Stack Test project, w
 |                              | include:                           |
 |                              v                                    |
 |  +-------------------------------------------------------------+  |
-|  |               Foundation Layer (from docker-lab)            |  |
+|  |               Foundation Layer (from core)            |  |
 |  |                                                             |  |
 |  |  +-------------------+  +-------------------------------+   |  |
 |  |  |      Traefik      |  |    Database Profiles          |   |  |
@@ -60,7 +60,7 @@ This document describes the architecture of the Docker Lab Stack Test project, w
 ## File Structure
 
 ```
-docker-lab-stack-test/
+core-stack-test/
 ├── docker-compose.yml          # Main orchestration file
 ├── .env.example                # Environment configuration template
 ├── .env                        # Local environment (gitignored)
@@ -275,7 +275,7 @@ The foundation is imported via Docker Compose's `include:` directive:
 
 ```yaml
 include:
-  - path: ${DOCKER_LAB_PATH:-../peermesh-docker-lab}/docker-compose.yml
+  - path: ${DOCKER_LAB_PATH:-../peermesh-core}/docker-compose.yml
 ```
 
 This provides:
@@ -302,16 +302,16 @@ networks:
 
 | File | Purpose |
 |------|---------|
-| `/Users/grig/work/peermesh/repo/docker-lab-stack-test/docker-compose.yml` | Main orchestration file with all 10 applications |
-| `/Users/grig/work/peermesh/repo/docker-lab-stack-test/.env.example` | Environment configuration template with all variables |
-| `/Users/grig/work/peermesh/repo/docker-lab-stack-test/docs/COMPOSE-ARCHITECTURE.md` | This architecture documentation |
+| `/Users/grig/work/peermesh/repo/core-stack-test/docker-compose.yml` | Main orchestration file with all 10 applications |
+| `/Users/grig/work/peermesh/repo/core-stack-test/.env.example` | Environment configuration template with all variables |
+| `/Users/grig/work/peermesh/repo/core-stack-test/docs/COMPOSE-ARCHITECTURE.md` | This architecture documentation |
 
 ## Next Steps
 
 1. **Copy and configure environment**: `cp .env.example .env` and edit
 2. **Generate secrets**: `./scripts/generate-secrets.sh`
 3. **Create config directories**: Set up application-specific configs
-4. **Start foundation first**: Ensure docker-lab foundation is running
+4. **Start foundation first**: Ensure core foundation is running
 5. **Start applications**: `docker compose --profile <profile> up -d`
 6. **Initialize databases**: Run initialization commands for each app
 7. **Configure DNS**: Point subdomains to your server
@@ -320,5 +320,5 @@ networks:
 ---
 
 *Generated: 2026-01-02*
-*Foundation: peermesh-docker-lab*
+*Foundation: peermesh-core*
 *Applications: 10 (GoToSocial, WriteFreely, PeerTube, Listmonk, rss2bsky, ActivityPods, n8n, Pixelfed, Castopod, Manyfold)*

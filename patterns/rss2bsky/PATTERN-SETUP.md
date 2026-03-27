@@ -4,7 +4,7 @@
 
 **Name**: rss2bsky - RSS to Bluesky Syndication
 **Purpose**: Lightweight cron-based RSS to Bluesky cross-posting
-**Source**: Adapted from peermesh-docker-lab examples
+**Source**: Adapted from peermesh-core examples
 
 ## Files Created
 

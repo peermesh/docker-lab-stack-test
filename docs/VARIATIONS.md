@@ -1,10 +1,10 @@
 # Variations Documentation
 
-Complete documentation for docker-lab-stack-test deployment variations.
+Complete documentation for core-stack-test deployment variations.
 
 ## Summary
 
-This repository provides multiple deployment configurations (variations) to test different aspects of the docker-lab infrastructure patterns.
+This repository provides multiple deployment configurations (variations) to test different aspects of the core infrastructure patterns.
 
 ---
 

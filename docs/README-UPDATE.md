@@ -72,7 +72,7 @@ Expanded directory tree to show:
 
 ## Files Modified
 
-- `/Users/grig/work/peermesh/repo/docker-lab-stack-test/README.md` - Complete rewrite
+- `/Users/grig/work/peermesh/repo/core-stack-test/README.md` - Complete rewrite
 
 ## Next Steps
 
