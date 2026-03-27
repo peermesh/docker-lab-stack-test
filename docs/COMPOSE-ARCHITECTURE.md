@@ -275,7 +275,7 @@ The foundation is imported via Docker Compose's `include:` directive:
 
 ```yaml
 include:
-  - path: ${DOCKER_LAB_PATH:-../peer-mesh-docker-lab}/docker-compose.yml
+  - path: ${DOCKER_LAB_PATH:-../peermesh-docker-lab}/docker-compose.yml
 ```
 
 This provides:
@@ -320,5 +320,5 @@ networks:
 ---
 
 *Generated: 2026-01-02*
-*Foundation: peer-mesh-docker-lab*
+*Foundation: peermesh-docker-lab*
 *Applications: 10 (GoToSocial, WriteFreely, PeerTube, Listmonk, rss2bsky, ActivityPods, n8n, Pixelfed, Castopod, Manyfold)*

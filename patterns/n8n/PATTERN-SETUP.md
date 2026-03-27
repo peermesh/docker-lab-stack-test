@@ -58,5 +58,5 @@ docker compose -f docker-compose.yml \
 
 ## Source
 
-Adapted from peer-mesh-docker-lab n8n example pattern.
+Adapted from peermesh-docker-lab n8n example pattern.
 Sanitized for public repository use.

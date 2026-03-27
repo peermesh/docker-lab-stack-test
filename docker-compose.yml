@@ -53,7 +53,7 @@
 
 include:
   # Foundation infrastructure
-  - path: ${DOCKER_LAB_PATH:-../peer-mesh-docker-lab}/docker-compose.yml
+  - path: ${DOCKER_LAB_PATH:-../peermesh-docker-lab}/docker-compose.yml
 
 # ==============================================================
 # Extension Fields (YAML Anchors for reuse)

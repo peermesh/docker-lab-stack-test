@@ -6,7 +6,7 @@
 |-------|-------|
 | Pattern Name | GoToSocial |
 | Version | 1.0 |
-| Source | Adapted from peer-mesh-docker-lab examples |
+| Source | Adapted from peermesh-docker-lab examples |
 | Created | 2026-01-02 |
 
 ## What This Pattern Provides

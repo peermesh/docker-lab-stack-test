@@ -44,7 +44,7 @@ docker compose -f docker-compose.yml \
 
 ## Source
 
-Adapted from: `peer-mesh-docker-lab/.dev/examples/pixelfed/`
+Adapted from: `peermesh-docker-lab/.dev/examples/pixelfed/`
 
 ## Date Created
 
