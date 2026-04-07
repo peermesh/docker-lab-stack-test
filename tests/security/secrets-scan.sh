@@ -71,6 +71,8 @@ build_excludes() {
     for pattern in "${EXCLUDE_PATTERNS[@]}"; do
         excludes="$excludes --exclude=$pattern --exclude-dir=$pattern"
     done
+    # Exclude test scripts (they use password vars for testing)
+    excludes="$excludes --exclude=*.sh"
     echo "$excludes"
 }
 

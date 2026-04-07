@@ -1,0 +1,170 @@
+# AGENTS.md - Peer Mesh Docker Lab
+
+## Project Overview
+
+**Location:** `/Users/grig/work/peermesh/repo/docker-lab-stack-test/`  
+**Purpose:** Integration test bundle for docker-lab infrastructure with 10 production-ready self-hosted patterns (Fediverse and federated services).
+
+---
+
+## Global Context
+
+For system-wide agent orchestration rules, work order status definitions, and general agent guidelines, see:  
+**`~/.agents/AGENTS.md`**
+
+---
+
+## Project-Specific Instructions
+
+### What This Project Does
+
+Docker Lab Stack Test validates the PeerMesh docker-lab infrastructure through:
+- **Security tests** - TLS, secrets, permissions, network isolation
+- **Integration tests** - Service connectivity, health checks, databases
+- **10 self-hosted patterns** - Production-ready Fediverse services
+
+### Key Architecture
+
+```
+docker-lab-stack-test/
+├── foundation/           # Standalone infrastructure layer
+│   ├── docker-compose.yml
+│   └── init-scripts/     # Database initialization
+├── patterns/             # 10 application patterns
+│   ├── gotosocial/       # ActivityPub social network
+│   ├── writefreely/      # Federated blogging
+│   ├── peertube/         # Decentralized video
+│   ├── listmonk/         # Newsletter manager
+│   ├── rss2bsky/         # RSS to Bluesky bridge
+│   ├── activitypods/     # Solid pods + ActivityPub
+│   ├── n8n/              # Workflow automation
+│   ├── pixelfed/         # Federated image sharing
+│   ├── castopod/         # Podcast hosting
+│   └── manyfold/         # 3D model library
+├── docker-compose.yml    # Main orchestration
+├── .env.example          # Configuration template
+└── tests/                # Security & integration tests
+```
+
+### The 10 Patterns
+
+| Pattern | Database Dependencies | Profile Name |
+|---------|----------------------|--------------|
+| GoToSocial | None (SQLite) | `gotosocial` |
+| WriteFreely | MySQL | `writefreely`, `mysql` |
+| PeerTube | PostgreSQL, Redis | `peertube`, `postgresql`, `redis` |
+| Listmonk | PostgreSQL | `listmonk`, `postgresql` |
+| rss2bsky | None | `rss2bsky` |
+| ActivityPods | MongoDB, Redis | `activitypods`, `mongodb`, `redis` |
+| n8n | PostgreSQL | `n8n`, `postgresql` |
+| Pixelfed | PostgreSQL, Redis | `pixelfed`, `postgresql`, `redis` |
+| Castopod | MySQL, Redis | `castopod`, `mysql`, `redis` |
+| Manyfold | PostgreSQL, Redis | `manyfold`, `postgresql`, `redis` |
+
+### Foundation Layer Services
+
+| Service | Image | Purpose | Required Profile |
+|---------|-------|---------|------------------|
+| Traefik | traefik:v3.0 | Reverse proxy, TLS termination | `traefik` |
+| PostgreSQL | pgvector/pgvector:pg16 | Relational database | `postgresql` |
+| MySQL | mysql:8.0 | Relational database | `mysql` |
+| MongoDB | mongo:6.0 | Document database | `mongodb` |
+| Redis | redis:7-alpine | Cache & message queue | `redis` |
+| MinIO | minio/minio:latest | S3-compatible storage | `minio` |
+
+### Two Modes of Operation
+
+**1. Standalone Mode (Default)**
+Uses the embedded `./foundation/` directory:
+```bash
+docker compose --profile traefik --profile postgresql --profile gotosocial up -d
+```
+
+**2. External Mode**
+Uses external docker-lab repository via environment variable:
+```bash
+export DOCKER_LAB_PATH=../peer-mesh-docker-lab
+docker compose --profile traefik --profile gotosocial up -d
+```
+
+The main `docker-compose.yml` uses: `include: ${DOCKER_LAB_PATH:-./foundation}/docker-compose.yml`
+
+---
+
+## Work Order Location Structure
+
+Work orders for this project are managed through the **global OpenClaw work order system**:
+
+**Index:** `~/.agents/openclaw/.dev/ai/workorders/INDEX.yaml`
+
+This project uses the `peermesh` parallel group, allowing concurrent work with other non-sequential tasks.
+
+**Project-specific state tracking:**
+- **State file:** `.dev/ai/STATE-OF-PROJECT.md`
+- **Review history:** `.dev/ai/reviews/`
+- **Work orders:** Referenced in global INDEX.yaml with `parallel_group: peermesh`
+
+---
+
+## Quick Reference Commands
+
+```bash
+# Run all tests
+./tests/run-all.sh
+
+# Validate specific pattern
+./tests/integration/validate-patterns.sh
+
+# Generate secrets
+./scripts/generate-secrets.sh
+
+# Deploy single pattern with dependencies
+docker compose --profile traefik --profile postgresql --profile n8n up -d
+
+# Deploy full stack
+docker compose --profile full up -d
+```
+
+---
+
+## Additional Context
+
+For detailed project state, recent work history, and pending decisions, see:  
+**`.dev/ai/STATE-OF-PROJECT.md`**
+
+This file tracks:
+- Current development phase
+- Recent changes (committed and uncommitted)
+- Service matrix and validation status
+- Next actions and blockers
+- Previous review summaries
+
+---
+
+## Network Architecture
+
+| Network | Type | Purpose |
+|---------|------|---------|
+| pmdl_proxy-external | Bridge | Public-facing services (via Traefik) |
+| pmdl_db-internal | Bridge (internal) | Database access |
+| pmdl_app-internal | Bridge (internal) | Inter-service communication |
+
+---
+
+## Resource Requirements
+
+| Configuration | RAM Required |
+|---------------|--------------|
+| Traefik only | 128MB |
+| Minimal (1 pattern + DB) | 1.5GB |
+| Full stack (all 10 patterns) | 8GB+ |
+
+---
+
+## Notes for Agents
+
+1. **Always activate required database profiles** alongside app profiles (e.g., `--profile postgresql --profile n8n`)
+2. **Foundation layer is self-contained** - no external dependencies needed for testing
+3. **All secrets are file-based** - never hardcode credentials in compose files
+4. **Tests validate YAML structure and dependencies** - full integration requires running containers
+5. **Parallel group: peermesh** - This project can be worked on concurrently with other non-infrastructure tasks

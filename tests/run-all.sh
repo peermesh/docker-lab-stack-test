@@ -186,6 +186,10 @@ main() {
     run_test "Secrets Scan" "$SCRIPT_DIR/security/secrets-scan.sh"
     run_test "Permissions Check" "$SCRIPT_DIR/security/permissions-check.sh"
 
+    # Pattern Validation Tests
+    print_section "Pattern Validation Tests"
+    run_test "Pattern Configuration" "$SCRIPT_DIR/integration/validate-patterns.sh"
+
     # Integration Tests
     print_section "Integration Tests"
     run_test "Health Checks" "$SCRIPT_DIR/integration/health-checks.sh"

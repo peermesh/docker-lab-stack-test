@@ -111,9 +111,11 @@ check_container_dns() {
         return 0
     fi
 
-    # Convert to array
-    local container_array
-    mapfile -t container_array <<< "$containers"
+    # Convert to array (bash 3.x compatible)
+    local container_array=()
+    while IFS= read -r line; do
+        container_array+=("$line")
+    done <<< "$containers"
 
     if [[ ${#container_array[@]} -lt 2 ]]; then
         print_result "skip" "Need at least 2 containers for DNS test"
@@ -177,8 +179,9 @@ check_container_connectivity() {
         return 0
     fi
 
-    # Parse container:port mappings
-    declare -A container_ports
+    # Parse container:port mappings (bash 3.x compatible - use parallel arrays)
+    local container_names=()
+    local container_port_list=()
     while IFS= read -r line; do
         local name ports
         name="${line%%:*}"
@@ -186,21 +189,18 @@ check_container_connectivity() {
 
         # Extract first internal port (e.g., "0.0.0.0:8080->80/tcp" -> "80")
         if [[ "$ports" =~ -\>([0-9]+) ]]; then
-            container_ports["$name"]="${BASH_REMATCH[1]}"
+            container_names+=("$name")
+            container_port_list+=("${BASH_REMATCH[1]}")
         fi
     done <<< "$containers"
 
-    if [[ ${#container_ports[@]} -lt 2 ]]; then
+    if [[ ${#container_names[@]} -lt 2 ]]; then
         print_result "skip" "Need at least 2 containers with exposed ports"
         return 0
     fi
 
     # Pick first container as source
-    local source=""
-    for c in "${!container_ports[@]}"; do
-        source="$c"
-        break
-    done
+    local source="${container_names[0]}"
 
     # Check if source has connectivity tools
     local conn_cmd=""
@@ -217,10 +217,11 @@ check_container_connectivity() {
         return 0
     fi
 
-    # Test connectivity to other containers
-    for target in "${!container_ports[@]}"; do
+    # Test connectivity to other containers (using parallel arrays)
+    for i in "${!container_names[@]}"; do
+        local target="${container_names[$i]}"
         if [[ "$target" != "$source" ]]; then
-            local port="${container_ports[$target]}"
+            local port="${container_port_list[$i]}"
 
             if [[ -n "$port" ]]; then
                 local result
